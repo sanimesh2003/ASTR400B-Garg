@@ -40,37 +40,56 @@ def Read(filename):
 
     line2 = file.readline()
     label2, value2 = line2.split()
-    total = int(value2)  # total number of particles
+    expected_total_particles = int(value2)  # total number of particles (from header)
 
     file.readline()
     file.readline()
 
-    ptype_list = []
-    m_list = []
-    x_list = []
-    y_list = []
-    z_list = []
-    vx_list = []
-    vy_list = []
-    vz_list = []
+    ptype_arr = np.zeros(expected_total_particles, dtype=float)
+    m_arr     = np.zeros(expected_total_particles, dtype=float)
+    x_arr     = np.zeros(expected_total_particles, dtype=float)
+    y_arr     = np.zeros(expected_total_particles, dtype=float)
+    z_arr     = np.zeros(expected_total_particles, dtype=float)
+    vx_arr    = np.zeros(expected_total_particles, dtype=float)
+    vy_arr    = np.zeros(expected_total_particles, dtype=float)
+    vz_arr    = np.zeros(expected_total_particles, dtype=float)
 
-    for _ in range(total):
+    actual_particles_read = 0
+    for i in range(expected_total_particles):
         line = file.readline()
         if not line:
             # in case of truncated file
             break
 
         vals = line.split()
-        ptype_list.append(float(vals[0]))
-        m_list.append(float(vals[1]))
-        x_list.append(float(vals[2]))
-        y_list.append(float(vals[3]))
-        z_list.append(float(vals[4]))
-        vx_list.append(float(vals[5]))
-        vy_list.append(float(vals[6]))
-        vz_list.append(float(vals[7]))
+        # Basic check for sufficient values, can be made more robust
+        if len(vals) == 8:
+            try:
+                ptype_arr[actual_particles_read] = float(vals[0])
+                m_arr[actual_particles_read]     = float(vals[1])
+                x_arr[actual_particles_read]     = float(vals[2])
+                y_arr[actual_particles_read]     = float(vals[3])
+                z_arr[actual_particles_read]     = float(vals[4])
+                vx_arr[actual_particles_read]    = float(vals[5])
+                vy_arr[actual_particles_read]    = float(vals[6])
+                vz_arr[actual_particles_read]    = float(vals[7])
+                actual_particles_read += 1
+            except ValueError:
+                continue # Skip this particle
+        else:
+            continue # Skip this particle
 
     file.close()
+
+    if actual_particles_read < expected_total_particles:
+        ptype_arr = ptype_arr[:actual_particles_read]
+        m_arr     = m_arr[:actual_particles_read]
+        x_arr     = x_arr[:actual_particles_read]
+        y_arr     = y_arr[:actual_particles_read]
+        z_arr     = z_arr[:actual_particles_read]
+        vx_arr    = vx_arr[:actual_particles_read]
+        vy_arr    = vy_arr[:actual_particles_read]
+        vz_arr    = vz_arr[:actual_particles_read]
 
     dt = np.dtype([
         ('type', float),
@@ -83,15 +102,16 @@ def Read(filename):
         ('vz', float)
     ])
 
-    data_array = np.zeros(total, dtype=dt)
+    data_array = np.zeros(actual_particles_read, dtype=dt)
 
-    data_array['type'] = ptype_list
-    data_array['m']    = m_list
-    data_array['x']    = x_list
-    data_array['y']    = y_list
-    data_array['z']    = z_list
-    data_array['vx']   = vx_list
-    data_array['vy']   = vy_list
-    data_array['vz']   = vz_list
+    data_array['type'] = ptype_arr
+    data_array['m']    = m_arr
+    data_array['x']    = x_arr
+    data_array['y']    = y_arr
+    data_array['z']    = z_arr
+    data_array['vx']   = vx_arr
+    data_array['vy']   = vy_arr
+    data_array['vz']   = vz_arr
 
+    total = actual_particles_read
     return time, total, data_array

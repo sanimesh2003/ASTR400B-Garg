@@ -79,17 +79,18 @@ class MassProfile:
         rr = self._distance_from_com(x_arr, y_arr, z_arr)
 
         r_array = np.atleast_1d(radius)
+        
+        Menc_arr = np.zeros(len(r_array), dtype=float) # Pre-allocate numpy array
 
-        Menc_list = []
-        for rmax in r_array:
+        for i, rmax in enumerate(r_array): # Use enumerate to get index
             inside_idx = np.where(rr < rmax)[0]
             mass_enclosed = np.sum(mass_arr[inside_idx]) * 1e10  # Msun
-            Menc_list.append(mass_enclosed)
+            Menc_arr[i] = mass_enclosed # Assign directly to the array
 
-        if len(Menc_list) == 1:
-            return Menc_list[0]
+        if len(r_array) == 1: # Check based on the input r_array size
+            return Menc_arr[0]
         else:
-            return np.array(Menc_list)
+            return Menc_arr
 
     def MassEnclosedTotal(self, radius):
         """

@@ -28,10 +28,10 @@ def dist3d(x, y, z, x0, y0, z0):
 def mass_loss_m33():
     """
     For every snapshot:
-        • read M33 file and its COM (ptype = 2)
+        • read M33 file and its COM (ptype = 2)
         • take Jacobi radius R_J from JacobiRadius.csv
-        • sum stellar mass (ptype = 2 or 3) inside R_J
-        • compare to initial stellar mass (snapshot 0) → bound fraction
+        • sum stellar mass (ptype = 2 or 3) inside R_J
+        • compare to initial stellar mass (snapshot 0) → bound fraction
     Saves results to M33_MassLoss.csv
     """
     jaco_df = pd.read_csv("JacobiRadius.csv")
@@ -56,7 +56,7 @@ def mass_loss_m33():
                 row_c.xcom.values[0],   row_c.ycom.values[0],  row_c.zcom.values[0])
     # -----------------------------------------------------------------------
 
-    # --- initial stellar mass (snapshot 0 or earliest available) -----------
+    # --- initial stellar mass (snapshot 0 or earliest available) -----------
     zero_snap = 0 if 0 in jaco_df.snap_int.values else jaco_df.snap_int.min()
     init_vals = get_jacobi_and_com(zero_snap)
     if init_vals is None:
@@ -70,11 +70,22 @@ def mass_loss_m33():
     star_idx0 = np.where((data0['type'] == 2) | (data0['type'] == 3))[0]
     # total stellar mass (no radius cut, same as original)
     M33_init_star = np.sum(data0['m'][star_idx0]) * 1e10  # Msun
-    print(f"Initial M33 stellar mass (snapshot {zero_snap:03d}) = {M33_init_star:.2e} Msun")
+    print(f"Initial M33 stellar mass (snapshot {zero_snap:03d}) = {M33_init_star:.2e} Msun")
 
     # ---------------- iterate over snapshots ------------------------------
-    bound_records = []
-    for snap in sorted(jaco_df.snap_int.unique()):
+    unique_snaps = sorted(jaco_df.snap_int.unique())
+    num_potential_records = len(unique_snaps)
+
+    snapshot_arr = np.empty(num_potential_records, dtype='<U3') # For strings like '000'
+    snap_int_arr = np.zeros(num_potential_records, dtype=int)
+    time_Myr_arr = np.zeros(num_potential_records, dtype=float)
+    JacobiR_arr = np.zeros(num_potential_records, dtype=float)
+    Mstar_bound_arr = np.zeros(num_potential_records, dtype=float)
+    frac_bound_arr = np.zeros(num_potential_records, dtype=float)
+    
+    record_idx = 0
+
+    for snap in unique_snaps:
         vals = get_jacobi_and_com(snap)
         if vals is None:
             continue
@@ -87,17 +98,39 @@ def mass_loss_m33():
         _, _, data = Read(m33_file)
         star_idx = np.where((data['type'] == 2) | (data['type'] == 3))[0]
 
-        # distance of stellar particles from COM
-        rr = dist3d(data['x'][star_idx], data['y'][star_idx], data['z'][star_idx],
-                    xcom, ycom, zcom)
+        if len(star_idx) == 0: # No stars of the specified types found
+            Mstar_bound = 0.0
+        else:
+            # distance of stellar particles from COM
+            rr = dist3d(data['x'][star_idx], data['y'][star_idx], data['z'][star_idx],
+                        xcom, ycom, zcom)
 
-        inside_idx = star_idx[np.where(rr < RJ)]
-        Mstar_bound = np.sum(data['m'][inside_idx]) * 1e10  # Msun
-        frac_bound  = Mstar_bound / M33_init_star
+            inside_idx = star_idx[np.where(rr < RJ)]
+            Mstar_bound = np.sum(data['m'][inside_idx]) * 1e10  # Msun
+        
+        if M33_init_star == 0: # Avoid division by zero
+            frac_bound = 0.0
+        else:
+            frac_bound  = Mstar_bound / M33_init_star
 
-        bound_records.append(dict(snapshot=f"{snap:03d}", snap_int=snap,
-                                  time_Myr=time_myr, JacobiR=RJ,
-                                  Mstar_bound=Mstar_bound, frac_bound=frac_bound))
+        snapshot_arr[record_idx] = f"{snap:03d}"
+        snap_int_arr[record_idx] = snap
+        time_Myr_arr[record_idx] = time_myr
+        JacobiR_arr[record_idx] = RJ
+        Mstar_bound_arr[record_idx] = Mstar_bound
+        frac_bound_arr[record_idx] = frac_bound
+        record_idx += 1
 
-    pd.DataFrame(bound_records).to_csv("M33_MassLoss.csv", index=False)
-    print(f"Mass‑loss results saved to M33_MassLoss.csv with {len(bound_records)} rows.")
+    data_for_df = {
+        'snapshot': snapshot_arr[:record_idx],
+        'snap_int': snap_int_arr[:record_idx],
+        'time_Myr': time_Myr_arr[:record_idx],
+        'JacobiR': JacobiR_arr[:record_idx],
+        'Mstar_bound': Mstar_bound_arr[:record_idx],
+        'frac_bound': frac_bound_arr[:record_idx]
+    }
+
+    bound_df = pd.DataFrame(data_for_df)
+    bound_df.to_csv("M33_MassLoss.csv", index=False)
+    print(f"Mass-loss results saved to M33_MassLoss.csv with {record_idx} rows.")
+    
